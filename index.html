@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Runic Puzzle</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --stone:      #12100d;
+    --stone-card: #1e1a10;
+    --border:     #3a3020;
+    --border-lit: #6a5a2a;
+    --gold-dim:   #4a3c18;
+    --gold-mid:   #8a7a4a;
+    --gold:       #c8a84a;
+    --rune-dim:   #5a4e2e;
+    --green:      #4aff88;
+    --green-dim:  rgba(74,255,136,0.0);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--stone);
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    padding: 24px 32px;
+    position: relative;
+  }
+
+  #app::after {
+    content: '';
+    position: absolute;
+    inset: 16px;
+    border: 1px solid var(--gold-dim);
+    pointer-events: none;
+    opacity: 0.3;
+  }
+
+  /* ── Wheel ── */
+  #wheel-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #wheel {
+    width: min(52vw, 340px);
+    height: min(52vw, 340px);
+    flex-shrink: 0;
+    transition: filter 0.7s ease;
+    overflow: visible;
+  }
+
+  /* Progressive glow on arms */
+  #wheel.g1 { filter: drop-shadow(0 0 4px  rgba(74,255,136,0.18)); }
+  #wheel.g2 { filter: drop-shadow(0 0 7px  rgba(74,255,136,0.30)); }
+  #wheel.g3 { filter: drop-shadow(0 0 10px rgba(74,255,136,0.42)); }
+  #wheel.g4 { filter: drop-shadow(0 0 13px rgba(74,255,136,0.52)); }
+  #wheel.g5 { filter: drop-shadow(0 0 16px rgba(74,255,136,0.62)); }
+  #wheel.g6 { filter: drop-shadow(0 0 19px rgba(74,255,136,0.72)); }
+  #wheel.g7 { filter: drop-shadow(0 0 22px rgba(74,255,136,0.82)); }
+  #wheel.g8 { filter: drop-shadow(0 0 26px rgba(74,255,136,0.92)); }
+
+  /* Full solve — blazing */
+  #wheel.solved {
+    filter:
+      drop-shadow(0 0 8px  rgba(74,255,136,0.9))
+      drop-shadow(0 0 24px rgba(74,255,136,0.7))
+      drop-shadow(0 0 48px rgba(74,255,136,0.4));
+    animation: wheel-pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes wheel-pulse {
+    0%,100% { filter:
+      drop-shadow(0 0 8px  rgba(74,255,136,0.9))
+      drop-shadow(0 0 24px rgba(74,255,136,0.7))
+      drop-shadow(0 0 48px rgba(74,255,136,0.4)); }
+    50%      { filter:
+      drop-shadow(0 0 14px rgba(74,255,136,1.0))
+      drop-shadow(0 0 36px rgba(74,255,136,0.85))
+      drop-shadow(0 0 70px rgba(74,255,136,0.55)); }
+  }
+
+  .cb {
+    fill: none;
+    stroke: var(--rune-dim);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.6s, opacity 0.6s;
+  }
+
+  .cb.ring-lit {
+    stroke: var(--green);
+    opacity: 1 !important;
+  }
+
+  .arm {
+    fill: none;
+    stroke: var(--rune-dim);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.32;
+    transition: stroke 0.45s, opacity 0.45s;
+  }
+  .arm.lit { stroke: var(--green); opacity: 0.92; }
+
+  /* Solved ring expand animation */
+  .ring-pulse {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 1.5;
+    opacity: 0;
+    transform-origin: 170px 170px;
+    animation: ring-expand 1.2s ease-out forwards;
+  }
+
+  @keyframes ring-expand {
+    0%   { r: 26px;  opacity: 0.9; stroke-width: 3; }
+    100% { r: 155px; opacity: 0;   stroke-width: 0.5; }
+  }
+
+  /* Center burst */
+  .center-burst {
+    fill: var(--green);
+    opacity: 0;
+    transform-origin: 170px 170px;
+    animation: burst 0.6s ease-out forwards;
+  }
+
+  @keyframes burst {
+    0%   { r: 4px;  opacity: 0.9; }
+    60%  { r: 18px; opacity: 0.6; }
+    100% { r: 6px;  opacity: 0.3; }
+  }
+
+  /* ── 2x2 Button Grid ── */
+  #rune-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+
+  .rb {
+    width: min(34vw, 148px);
+    height: min(34vw, 148px);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--stone-card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  .rb:hover  { border-color: var(--border-lit); background: #28221a; }
+  .rb:active { transform: scale(0.93); }
+  .rb svg    { width: 64px; height: 64px; pointer-events: none; }
+
+  .rs {
+    fill: none;
+    stroke: var(--rune-dim);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.2s;
+  }
+
+  .rb .lbl {
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .rb.pressed            { border-color: var(--gold-mid); background: #2e2818; }
+  .rb.pressed .rs        { stroke: var(--gold); }
+  .rb.pressed .lbl       { color: var(--gold-mid); }
+
+  /* solved — buttons glow green */
+  .rb.solved-glow {
+    border-color: rgba(74,255,136,0.4);
+    background: #141e14;
+    animation: btn-pulse 2s ease-in-out infinite;
+  }
+  .rb.solved-glow .rs  { stroke: rgba(74,255,136,0.6); }
+  .rb.solved-glow .lbl { color: rgba(74,255,136,0.5); }
+
+  @keyframes btn-pulse {
+    0%,100% { border-color: rgba(74,255,136,0.3); }
+    50%      { border-color: rgba(74,255,136,0.6); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="wheel-wrap">
+    <svg id="wheel" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+    </svg>
+  </div>
+
+  <div id="rune-grid">
+    <!-- Rune 0: AER -->
+    <button class="rb" data-idx="0" aria-label="Rune Aer">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <line x1="32" y1="6"  x2="32" y2="58" class="rs" stroke-width="2.4"/>
+        <line x1="32" y1="18" x2="18" y2="6"  class="rs" stroke-width="2.4"/>
+        <line x1="32" y1="18" x2="46" y2="6"  class="rs" stroke-width="2.4"/>
+        <line x1="32" y1="36" x2="20" y2="50" class="rs" stroke-width="2"/>
+        <line x1="32" y1="36" x2="44" y2="50" class="rs" stroke-width="2"/>
+      </svg>
+      <span class="lbl">Aer</span>
+    </button>
+
+    <!-- Rune 1: BAEL -->
+    <button class="rb" data-idx="1" aria-label="Rune Bael">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <line x1="20" y1="6"  x2="20" y2="58" class="rs" stroke-width="2.4"/>
+        <line x1="20" y1="18" x2="36" y2="10" class="rs" stroke-width="2"/>
+        <line x1="20" y1="18" x2="36" y2="26" class="rs" stroke-width="2"/>
+        <line x1="20" y1="38" x2="38" y2="30" class="rs" stroke-width="2"/>
+        <line x1="20" y1="38" x2="38" y2="46" class="rs" stroke-width="2"/>
+      </svg>
+      <span class="lbl">Bael</span>
+    </button>
+
+    <!-- Rune 2: CAER -->
+    <button class="rb" data-idx="2" aria-label="Rune Caer">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <line x1="32" y1="6"  x2="32" y2="58" class="rs" stroke-width="2.4"/>
+        <line x1="16" y1="20" x2="48" y2="20" class="rs" stroke-width="2.2"/>
+        <line x1="19" y1="38" x2="45" y2="38" class="rs" stroke-width="2"/>
+        <line x1="32" y1="50" x2="21" y2="60" class="rs" stroke-width="2"/>
+        <line x1="32" y1="50" x2="43" y2="60" class="rs" stroke-width="2"/>
+      </svg>
+      <span class="lbl">Caer</span>
+    </button>
+
+    <!-- Rune 3: DAER -->
+    <button class="rb" data-idx="3" aria-label="Rune Daer">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <line x1="18" y1="6"  x2="18" y2="58" class="rs" stroke-width="2.4"/>
+        <line x1="18" y1="6"  x2="48" y2="6"  class="rs" stroke-width="2.2"/>
+        <line x1="18" y1="58" x2="48" y2="58" class="rs" stroke-width="2.2"/>
+        <line x1="48" y1="6"  x2="48" y2="58" class="rs" stroke-width="1.8" stroke-dasharray="5,3"/>
+        <line x1="18" y1="32" x2="48" y2="32" class="rs" stroke-width="2"/>
+      </svg>
+      <span class="lbl">Daer</span>
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+
+  var FREQS  = [147, 220, 294, 440];
+  var ANSWER = [0, 1, 2, 3, 0, 2, 1, 3];
+  var ns     = 'http://www.w3.org/2000/svg';
+  var cx     = 170, cy = 170;
+
+  var audioCtx = null;
+  var userSeq  = [];
+  var locked   = false;
+  var solved   = false;
+
+  /* ── Audio ── */
+  function getCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playTone(freq) {
+    var c = getCtx(), now = c.currentTime;
+    var osc = c.createOscillator(), ov = c.createOscillator();
+    var g = c.createGain(), gv = c.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now);
+    ov.type  = 'sine'; ov.frequency.setValueAtTime(freq * 2.01, now);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.5, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+    gv.gain.setValueAtTime(0, now);
+    gv.gain.linearRampToValueAtTime(0.08, now + 0.012);
+    gv.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+    osc.connect(g);  g.connect(c.destination);
+    ov.connect(gv); gv.connect(c.destination);
+    osc.start(now); osc.stop(now + 2.2);
+    ov.start(now);  ov.stop(now + 1.4);
+  }
+
+  function playChord() {
+    /* triumphant resolution chord on solve */
+    [147, 185, 220, 294].forEach(function(f, i) {
+      setTimeout(function() { playTone(f); }, i * 120);
+    });
+  }
+
+  /* ── SVG helpers ── */
+  function el(tag, attrs) {
+    var e = document.createElementNS(ns, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function ln(x1,y1,x2,y2,extra) {
+    var a = {x1:x1,y1:y1,x2:x2,y2:y2};
+    if (extra) for (var k in extra) a[k]=extra[k];
+    return el('line',a);
+  }
+
+  /* ── Build Wheel ── */
+  var ringOuter, ringMid, ringInner, centerDot;
+
+  function buildWheel() {
+    var svg = document.getElementById('wheel');
+    svg.innerHTML = '';
+
+    /* Rings — store refs for solve animation */
+    ringOuter = el('circle',{cx:cx,cy:cy,r:130,class:'cb','stroke-width':1,opacity:0.18});
+    ringMid   = el('circle',{cx:cx,cy:cy,r:78, class:'cb','stroke-width':0.7,opacity:0.12,'stroke-dasharray':'2,6'});
+    ringInner = el('circle',{cx:cx,cy:cy,r:26, class:'cb','stroke-width':1.5,opacity:0.32});
+    centerDot = el('circle',{cx:cx,cy:cy,r:5,  fill:'#5a4e2e',stroke:'none',opacity:0.7});
+
+    svg.appendChild(ringOuter);
+    svg.appendChild(ringMid);
+    svg.appendChild(ringInner);
+    svg.appendChild(centerDot);
+
+    /* Start marker */
+    svg.appendChild(ln(cx,8,cx,26,{stroke:'#8a7a4a','stroke-width':2.5,'stroke-linecap':'round',opacity:0.9}));
+    svg.appendChild(el('polygon',{points:cx+',2 '+(cx+5)+',10 '+cx+',16 '+(cx-5)+',10',fill:'#8a7a4a',opacity:0.85}));
+
+    /* Arm definitions: [runeType, rotationDeg] CCW from 12 */
+    var defs = [
+      [0,  0],  /* AER   12:00 */
+      [1,315],  /* BAEL  10:30 */
+      [2,270],  /* CAER   9:00 */
+      [3,225],  /* DAER   7:30 */
+      [0,180],  /* AER    6:00 */
+      [2,135],  /* CAER   4:30 */
+      [1, 90],  /* BAEL   3:00 */
+      [3, 45],  /* DAER   1:30 */
+    ];
+
+    defs.forEach(function(d, i) {
+      var g = el('g',{
+        id: 'a'+(i+1),
+        class: 'arm',
+        transform: 'rotate('+d[1]+' '+cx+' '+cy+')'
+      });
+      makeStrokes(d[0], g);
+      svg.appendChild(g);
+    });
+  }
+
+  function makeStrokes(type, g) {
+    var sw = '2.2', sw2 = '1.9';
+    if (type === 0) {
+      /* AER: spine + V near tip + fork mid */
+      g.appendChild(ln(cx,144,cx,40,{'stroke-width':sw}));
+      g.appendChild(ln(cx,64, cx-14,48,{'stroke-width':sw}));
+      g.appendChild(ln(cx,64, cx+14,48,{'stroke-width':sw}));
+      g.appendChild(ln(cx,98, cx-12,112,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,98, cx+12,112,{'stroke-width':sw2}));
+    } else if (type === 1) {
+      /* BAEL: spine + two bracket pairs */
+      g.appendChild(ln(cx,144,cx,40,{'stroke-width':sw}));
+      g.appendChild(ln(cx,68, cx-16,58,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,68, cx-16,78,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,68, cx+16,58,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,68, cx+16,78,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,104,cx-14,94,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,104,cx-14,114,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,104,cx+14,94,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,104,cx+14,114,{'stroke-width':sw2}));
+    } else if (type === 2) {
+      /* CAER: spine + two crossbars + tip fork */
+      g.appendChild(ln(cx,144,cx,40,{'stroke-width':sw}));
+      g.appendChild(ln(cx-16,70,cx+16,70,{'stroke-width':sw}));
+      g.appendChild(ln(cx-13,100,cx+13,100,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,54, cx-11,42,{'stroke-width':sw2}));
+      g.appendChild(ln(cx,54, cx+11,42,{'stroke-width':sw2}));
+    } else {
+      /* DAER: spine + top bar + dashed mid + bottom bar */
+      g.appendChild(ln(cx,144,cx,40,{'stroke-width':sw}));
+      g.appendChild(ln(cx-15,56, cx+15,56,{'stroke-width':sw}));
+      g.appendChild(ln(cx-13,90, cx+13,90,{'stroke-width':sw2,'stroke-dasharray':'5,4'}));
+      g.appendChild(ln(cx-15,122,cx+15,122,{'stroke-width':sw}));
+    }
+  }
+
+  /* ── Progress ── */
+  function setProgress(count) {
+    var wheel = document.getElementById('wheel');
+    wheel.className = count > 0 ? 'g'+count : '';
+    for (var i = 1; i <= 8; i++) {
+      var arm = document.getElementById('a'+i);
+      if (arm) arm.className.baseVal = i <= count ? 'arm lit' : 'arm';
+    }
+  }
+
+  /* ── Solve celebration ── */
+  function celebrate() {
+    var svg   = document.getElementById('wheel');
+    var wheel = svg;
+
+    /* 1. All arms already lit. Add solved class for pulsing glow */
+    wheel.classList.add('solved');
+
+    /* 2. Light up rings */
+    setTimeout(function() {
+      ringOuter.classList.add('ring-lit');
+      ringOuter.setAttribute('stroke-width','1.8');
+      ringOuter.setAttribute('opacity','0.9');
+    }, 200);
+    setTimeout(function() {
+      ringInner.classList.add('ring-lit');
+      ringInner.setAttribute('stroke-width','2.5');
+      ringInner.setAttribute('opacity','1');
+    }, 400);
+    setTimeout(function() {
+      ringMid.classList.add('ring-lit');
+      ringMid.setAttribute('stroke-width','1.2');
+      ringMid.setAttribute('opacity','0.7');
+      ringMid.removeAttribute('stroke-dasharray');
+    }, 600);
+
+    /* 3. Center dot becomes green */
+    setTimeout(function() {
+      centerDot.setAttribute('fill','var(--green)');
+      centerDot.setAttribute('r','7');
+      centerDot.setAttribute('opacity','1');
+    }, 500);
+
+    /* 4. Expanding ring pulses — staggered */
+    [0, 400, 800, 1300].forEach(function(delay) {
+      setTimeout(function() {
+        var pulse = el('circle',{
+          cx: cx, cy: cy, r: 26,
+          class: 'ring-pulse'
+        });
+        svg.appendChild(pulse);
+        setTimeout(function() {
+          if (pulse.parentNode) pulse.parentNode.removeChild(pulse);
+        }, 1400);
+      }, delay + 300);
+    });
+
+    /* 5. Center burst */
+    setTimeout(function() {
+      var burst = el('circle',{cx:cx,cy:cy,r:4,class:'center-burst'});
+      svg.appendChild(burst);
+    }, 200);
+
+    /* 6. Start marker diamond lights up */
+    setTimeout(function() {
+      var diamond = svg.querySelector('polygon');
+      if (diamond) diamond.setAttribute('fill','var(--green)');
+    }, 700);
+
+    /* 7. Buttons glow */
+    setTimeout(function() {
+      document.querySelectorAll('.rb').forEach(function(b) {
+        b.classList.add('solved-glow');
+      });
+    }, 600);
+
+    /* 8. Triumphant chord */
+    playChord();
+  }
+
+  /* ── Flash button ── */
+  function flashBtn(idx) {
+    var btn = document.querySelectorAll('.rb')[idx];
+    btn.classList.add('pressed');
+    setTimeout(function() { btn.classList.remove('pressed'); }, 500);
+  }
+
+  /* ── Input ── */
+  function handlePress(idx) {
+    if (solved || locked) return;
+    playTone(FREQS[idx]);
+    flashBtn(idx);
+
+    var pos     = userSeq.length;
+    var correct = ANSWER[pos] === idx;
+
+    if (correct) {
+      userSeq.push(idx);
+      setProgress(userSeq.length);
+      if (userSeq.length === ANSWER.length) {
+        solved = true;
+        setTimeout(celebrate, 200);
+      }
+    } else {
+      locked = true;
+      setTimeout(function() {
+        userSeq = [];
+        setProgress(0);
+        locked = false;
+      }, 500);
+    }
+  }
+
+  document.querySelectorAll('.rb').forEach(function(btn, i) {
+    btn.addEventListener('click', function() { handlePress(i); });
+    btn.addEventListener('touchstart', function(e) {
+      e.preventDefault();
+      handlePress(i);
+    }, { passive: false });
+  });
+
+  buildWheel();
+  setProgress(0);
+
+})();
+</script>
+</body>
+</html>
+
